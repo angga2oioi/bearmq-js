@@ -13,9 +13,7 @@
 To install the library, clone this repository and run `npm install`:
 
 ```bash
-git clone https://github.com/yourusername/bearmq-js.git
-cd bearmq-js
-npm install
+npm i github:angga2oioi/bearmq-js#release
 ```
 
 ## Usage
