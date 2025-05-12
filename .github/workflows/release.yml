@@ -49,4 +49,4 @@ jobs:
           # Commit & push
           git add .
           git commit -m "Auto-build dist for release"
-          git push --force origin release
+          git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" release
