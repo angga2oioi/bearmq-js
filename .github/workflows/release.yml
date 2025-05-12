@@ -40,11 +40,8 @@ jobs:
           mv /tmp/package.json .
           mv /tmp/README.md . || true
 
-          # Move built files
-          mv dist/* ./dist
-
           # Remove unnecessary files
-          rm -rf dist/ .github/ node_modules/ src/
+          rm -rf .github/ node_modules/ src/
 
           # Commit & push
           git add .
