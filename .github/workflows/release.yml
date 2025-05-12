@@ -41,7 +41,7 @@ jobs:
           mv /tmp/README.md . || true
 
           # Move built files
-          mv dist/* .
+          mv dist/* ./dist
 
           # Remove unnecessary files
           rm -rf dist/ .github/ node_modules/ src/
