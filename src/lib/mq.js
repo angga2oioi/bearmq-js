@@ -7,51 +7,78 @@ exports.useMQ = (domain) => {
     let httpUrl = `http://${domain}`
     let wsUrl = `ws://${domain}`
 
-    const useProducer = (queueName, { prefetch, index, fanout }) => {
-        const queueInstance = {
-            queue: null,
-            bufferedJobs: [], // Buffer to hold jobs for batching
-            flushTimeout: null, // Timeout for auto-flushing jobs
-            lastSubmitTime: 0, // Track last submit time for flushing
-        };
+    let flushInterval = 1;  // Start with 1 ms
+    let lastJobTimestamp = Date.now();
+    let jobCount = 0;
 
-        // Submit a job to the current queue
-        const submit = async (job) => {
-            if (!queueInstance.queue) throw new Error('Queue is not created yet.');
+    // Batching settings
+    const BATCH_SIZE = 1000;  // Adjust this value based on your performance goals
+    let jobBatch = [];  // Array to collect jobs for batch submission
 
-            // Buffer the job
-            queueInstance.bufferedJobs.push(job);
+    // Dynamic adjustment parameters
+    const JOB_RATE_THRESHOLD = 1000;  // Jobs per second to trigger interval change
+    const MAX_FLUSH_INTERVAL = 50;    // Maximum flush interval (ms)
+    const MIN_FLUSH_INTERVAL = 1;     // Minimum flush interval (ms)
 
-            // If the batch size is reached, submit the jobs
-            if (queueInstance.bufferedJobs.length >= BATCH_SIZE) {
-                await submitBatch(queueInstance.bufferedJobs);
-                queueInstance.bufferedJobs = []; // Reset buffer after submit
+    // Function to adjust flush interval dynamically
+    const updateFlushInterval = () => {
+        const currentTime = Date.now();
+        const elapsedTime = currentTime - lastJobTimestamp;
+
+        // Calculate job arrival rate (jobs per second)
+        if (elapsedTime >= 1000) { // Every 1 second
+            const rate = jobCount / (elapsedTime / 1000); // jobs per second
+
+            if (rate > JOB_RATE_THRESHOLD) {
+                flushInterval = Math.max(MIN_FLUSH_INTERVAL, flushInterval - 1); // Decrease interval
+            } else {
+                flushInterval = Math.min(MAX_FLUSH_INTERVAL, flushInterval + 1); // Increase interval
             }
 
-            // Schedule flush if time interval exceeds FLUSH_INTERVAL
-            if (Date.now() - queueInstance.lastSubmitTime > FLUSH_INTERVAL) {
-                clearTimeout(queueInstance.flushTimeout);
-                queueInstance.flushTimeout = setTimeout(async () => {
-                    if (queueInstance.bufferedJobs.length > 0) {
-                        await submitBatch(queueInstance.bufferedJobs);
-                        queueInstance.bufferedJobs = []; // Reset buffer after submit
-                    }
-                }, FLUSH_INTERVAL);
-            }
+            jobCount = 0;
+            lastJobTimestamp = currentTime;
+        }
+    };
 
-            queueInstance.lastSubmitTime = Date.now();
-        };
-
-        // Submit a batch of jobs to the server
-        const submitBatch = async (batch) => {
+    // Function to submit batch of jobs
+    const submitJobBatch = async (queueInstance) => {
+        if (jobBatch.length > 0) {
             await fetch(`${httpUrl}/enqueue`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ queue: queueInstance.queue, jobs: batch }),
+                body: JSON.stringify({
+                    queue: queueInstance.queue,
+                    jobs: jobBatch
+                })
             });
+
+            jobBatch = [];  // Clear the batch after submission
+        }
+    };
+
+    // Automatically adjust the interval and submit jobs in batches
+    const submitJob = async (queueInstance, job) => {
+        jobBatch.push(job);  // Add job to the batch
+
+        if (jobBatch.length >= BATCH_SIZE) {
+            await submitJobBatch(queueInstance);  // Submit the batch if it's full
+        }
+
+        jobCount++;
+        updateFlushInterval(); // Update the flush interval dynamically
+    };
+
+    const useProducer = (queueName, { prefetch, index, fanout }) => {
+        const queueInstance = {
+            queue: queueName,  // Declare the type of queue
+
+            // Submit a job to the current queue
+            submit: async (job) => {
+                if (!queueInstance.queue) throw new Error('Queue is not created yet.');
+                await submitJob(queueInstance, job);
+            },
         };
 
-        queueInstance.queue = queueName;
         fetch(`${httpUrl}/config`, {
             method: 'POST',
             body: JSON.stringify({
@@ -62,9 +89,14 @@ exports.useMQ = (domain) => {
             })
         }).catch(console.error);
 
-        return {
-            submit,
-        };
+        // Periodically flush the batch if it's not full, based on the flush interval
+        setInterval(async () => {
+            if (jobBatch.length > 0) {
+                await submitJobBatch(queueInstance);  // Flush remaining jobs
+            }
+        }, flushInterval);
+
+        return queueInstance;
     };
 
     const useConsumer = (queueName) => {
