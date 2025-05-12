@@ -1,14 +1,10 @@
 //@ts-check
 const WebSocket = require("ws")
-const BATCH_SIZE = 500;  // Number of jobs per batch
-const FLUSH_INTERVAL = 100;  // Timeout in ms to flush the current batch if it hasn't reached BATCH_SIZE
-
 exports.useMQ = (domain) => {
     let httpUrl = `http://${domain}`
     let wsUrl = `ws://${domain}`
 
     let flushInterval = 1;  // Start with 1 ms
-    let jobCount = 0;
 
     // Batching settings
     const BATCH_SIZE = 500;
@@ -17,25 +13,25 @@ exports.useMQ = (domain) => {
     // Function to submit batch of jobs
     const submitJobBatch = async (queueInstance) => {
         if (jobBatch.length > 0) {
-            await fetch(`${httpUrl}/enqueue`, {
+            fetch(`${httpUrl}/enqueue`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     queue: queueInstance.queue,
                     jobs: jobBatch
                 })
-            });
+            }).catch(console.error);
 
             jobBatch = [];  // Clear the batch after submission
         }
     };
 
     // Automatically adjust the interval and submit jobs in batches
-    const submitJob = async (queueInstance, job) => {
+    const submitJob = (queueInstance, job) => {
         jobBatch.push(job);  // Add job to the batch
 
         if (jobBatch.length >= BATCH_SIZE) {
-            await submitJobBatch(queueInstance);  // Submit the batch if it's full
+            submitJobBatch(queueInstance);
         }
 
     };
@@ -47,7 +43,7 @@ exports.useMQ = (domain) => {
             // Submit a job to the current queue
             submit: async (job) => {
                 if (!queueInstance.queue) throw new Error('Queue is not created yet.');
-                await submitJob(queueInstance, job);
+                submitJob(queueInstance, job);
             },
         };
 
@@ -64,7 +60,7 @@ exports.useMQ = (domain) => {
         // Periodically flush the batch if it's not full, based on the flush interval
         setInterval(() => {
             if (jobBatch.length > 0) {
-                submitJobBatch(queueInstance).catch(console.error)
+                submitJobBatch(queueInstance)
             }
         }, flushInterval)
 
