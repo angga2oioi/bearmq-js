@@ -8,37 +8,11 @@ exports.useMQ = (domain) => {
     let wsUrl = `ws://${domain}`
 
     let flushInterval = 1;  // Start with 1 ms
-    let lastJobTimestamp = Date.now();
     let jobCount = 0;
 
     // Batching settings
-    const BATCH_SIZE = 1000;  // Adjust this value based on your performance goals
+    const BATCH_SIZE = 500;
     let jobBatch = [];  // Array to collect jobs for batch submission
-
-    // Dynamic adjustment parameters
-    const JOB_RATE_THRESHOLD = 1000;  // Jobs per second to trigger interval change
-    const MAX_FLUSH_INTERVAL = 50;    // Maximum flush interval (ms)
-    const MIN_FLUSH_INTERVAL = 1;     // Minimum flush interval (ms)
-
-    // Function to adjust flush interval dynamically
-    const updateFlushInterval = () => {
-        const currentTime = Date.now();
-        const elapsedTime = currentTime - lastJobTimestamp;
-
-        // Calculate job arrival rate (jobs per second)
-        if (elapsedTime >= 1000) { // Every 1 second
-            const rate = jobCount / (elapsedTime / 1000); // jobs per second
-
-            if (rate > JOB_RATE_THRESHOLD) {
-                flushInterval = Math.max(MIN_FLUSH_INTERVAL, flushInterval - 1); // Decrease interval
-            } else {
-                flushInterval = Math.min(MAX_FLUSH_INTERVAL, flushInterval + 1); // Increase interval
-            }
-
-            jobCount = 0;
-            lastJobTimestamp = currentTime;
-        }
-    };
 
     // Function to submit batch of jobs
     const submitJobBatch = async (queueInstance) => {
@@ -64,8 +38,6 @@ exports.useMQ = (domain) => {
             await submitJobBatch(queueInstance);  // Submit the batch if it's full
         }
 
-        jobCount++;
-        updateFlushInterval(); // Update the flush interval dynamically
     };
 
     const useProducer = (queueName, { prefetch, index, fanout }) => {
@@ -90,11 +62,11 @@ exports.useMQ = (domain) => {
         }).catch(console.error);
 
         // Periodically flush the batch if it's not full, based on the flush interval
-        setInterval(async () => {
+        setInterval(() => {
             if (jobBatch.length > 0) {
-                await submitJobBatch(queueInstance);  // Flush remaining jobs
+                submitJobBatch(queueInstance).catch(console.error)
             }
-        }, flushInterval);
+        }, flushInterval)
 
         return queueInstance;
     };
