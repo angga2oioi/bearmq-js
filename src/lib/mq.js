@@ -12,18 +12,22 @@ exports.useMQ = (domain) => {
 
     // Function to submit batch of jobs
     const submitJobBatch = async (queueInstance) => {
+        let res
         if (jobBatch.length > 0) {
-            fetch(`${httpUrl}/enqueue`, {
+            res = fetch(`${httpUrl}/enqueue`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     queue: queueInstance.queue,
                     jobs: jobBatch
                 })
-            }).catch(console.error);
+            })
 
             jobBatch = [];  // Clear the batch after submission
+            
         }
+
+        return res
     };
 
     // Automatically adjust the interval and submit jobs in batches
@@ -31,9 +35,9 @@ exports.useMQ = (domain) => {
         jobBatch.push(job);  // Add job to the batch
 
         if (jobBatch.length >= BATCH_SIZE) {
-            submitJobBatch(queueInstance);
+            return submitJobBatch(queueInstance);
         }
-
+        return null
     };
 
     const useProducer = (queueName, { prefetch, index, fanout }) => {
@@ -43,7 +47,7 @@ exports.useMQ = (domain) => {
             // Submit a job to the current queue
             submit: async (job) => {
                 if (!queueInstance.queue) throw new Error('Queue is not created yet.');
-                submitJob(queueInstance, job);
+                return submitJob(queueInstance, job);
             },
         };
 
