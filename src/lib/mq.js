@@ -24,7 +24,7 @@ exports.useMQ = (domain) => {
             })
 
             jobBatch = [];  // Clear the batch after submission
-            
+
         }
 
         return res
@@ -40,7 +40,7 @@ exports.useMQ = (domain) => {
         return null
     };
 
-    const useProducer = (queueName, { prefetch, index, fanout }) => {
+    const useProducer = async (queueName, { prefetch, index, fanout }) => {
         const queueInstance = {
             queue: queueName,  // Declare the type of queue
 
@@ -51,15 +51,20 @@ exports.useMQ = (domain) => {
             },
         };
 
-        fetch(`${httpUrl}/config`, {
-            method: 'POST',
-            body: JSON.stringify({
-                queue: queueName,
-                prefetch,
-                index,
-                fanout
-            })
-        }).catch(console.error);
+        try {
+            await fetch(`${httpUrl}/config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    queue: queueName,
+                    prefetch,
+                    index,
+                    fanout
+                })
+            });
+        } catch (err) {
+            console.error(err);
+        }
 
         // Periodically flush the batch if it's not full, based on the flush interval
         setInterval(() => {
@@ -70,6 +75,7 @@ exports.useMQ = (domain) => {
 
         return queueInstance;
     };
+
 
     const useConsumer = (queueName) => {
         const queueInstance = {
