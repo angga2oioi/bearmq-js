@@ -24,7 +24,7 @@ exports.useMQ = (domain) => {
             })
 
             jobBatch = [];  // Clear the batch after submission
-            
+
         }
 
         return res
@@ -72,32 +72,45 @@ exports.useMQ = (domain) => {
     };
 
     const useConsumer = (queueName) => {
-        const queueInstance = {
-            queue: null,  // Declare the type of queue
-            socket: undefined,  // Declare the type of socket
-            // Acknowledge a job for this specific queue instance
-        };
+        const EventEmitter = require('node:events');
+        const emitter = new EventEmitter();
 
-        queueInstance.queue = queueName;
-        queueInstance.socket = new WebSocket(wsUrl);
+        const socket = new WebSocket(wsUrl);
 
-        queueInstance.socket.on('open', () => {
-            queueInstance.socket?.send(JSON.stringify({ type: 'subscribe', queue: queueInstance.queue }));
-        });
-
-        queueInstance.socket.ack = (jobId) => {
-            if (!queueInstance.socket || queueInstance.socket.readyState !== WebSocket.OPEN) {
+        emitter.ack = (jobId) => {
+            if (!socket || socket.readyState !== WebSocket.OPEN) {
                 throw new Error('Socket is not connected.');
             }
 
-            queueInstance.socket.send(JSON.stringify({
+            socket.send(JSON.stringify({
                 type: 'ack',
-                queue: queueInstance.queue,
+                queue: queueName,
                 jobId
             }));
         }
 
-        return queueInstance.socket;
+        socket.addEventListener('open', event => {
+            socket?.send(JSON.stringify({ type: 'subscribe', queue: queueName }));
+        });
+
+        // Listen for messages and executes when a message is received from the server.
+        socket.addEventListener('message', event => {
+            emitter.emit("message", event.data)
+        });
+
+        socket.addEventListener('close', event => {
+            console.log('WebSocket connection closed:', event.code, event.reason);
+            emitter.emit("close", event)
+        });
+        // Executes if an error occurs during the WebSocket communication.
+        socket.addEventListener('error', error => {
+            console.error('WebSocket error:', error);
+            emitter.emit("error", error)
+        });
+
+        emitter.close = () => socket.close()
+
+        return emitter
     }
 
     return {
