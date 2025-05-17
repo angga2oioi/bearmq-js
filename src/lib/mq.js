@@ -95,8 +95,8 @@ exports.useMQ = (domain) => {
 
         // Listen for messages and executes when a message is received from the server.
         socket.addEventListener('message', event => {
-            const { data,  type } = JSON.parse(event.data)
-            if (data.length < 1) {
+            const { data, type } = JSON.parse(event.data)
+            if(data.length <1 ){
                 return
             }
             data.forEach(item => {
