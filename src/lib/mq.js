@@ -119,6 +119,10 @@ exports.useMQ = (domain) => {
         return emitter
     }
 
+    fetch(`${httpUrl}/ping`, {
+        method: 'GET'
+    }).catch(console.error);
+
     return {
         useProducer,
         useConsumer
