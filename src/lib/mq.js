@@ -40,7 +40,7 @@ exports.useMQ = (domain) => {
         return null
     };
 
-    const useProducer = (queueName, { prefetch, index, fanout }) => {
+    const useProducer = (queueName, options) => {
         const queueInstance = {
             queue: queueName,  // Declare the type of queue
 
@@ -55,9 +55,8 @@ exports.useMQ = (domain) => {
             method: 'POST',
             body: JSON.stringify({
                 queue: queueName,
-                prefetch,
-                index,
-                fanout
+                index: options?.index ?? [],
+                fanout: options?.fanout ?? false
             })
         }).catch(console.error);
 
@@ -71,7 +70,7 @@ exports.useMQ = (domain) => {
         return queueInstance;
     };
 
-    const useConsumer = (queueName) => {
+    const useConsumer = (queueName, prefetch = null) => {
         const EventEmitter = require('node:events');
         const emitter = new EventEmitter();
 
@@ -90,13 +89,13 @@ exports.useMQ = (domain) => {
         }
 
         socket.addEventListener('open', event => {
-            socket?.send(JSON.stringify({ type: 'subscribe', queue: queueName }));
+            socket?.send(JSON.stringify({ type: 'subscribe', queue: queueName, prefetch }));
         });
 
         // Listen for messages and executes when a message is received from the server.
         socket.addEventListener('message', event => {
             const { data, type } = JSON.parse(event.data)
-            if(data.length <1 ){
+            if (data.length < 1) {
                 return
             }
             data.forEach(item => {
